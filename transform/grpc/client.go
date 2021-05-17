@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func CllentUnaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func ClientUnaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ctx = metadata.AppendToOutgoingContext(ctx, "traceId", ctx.Value("traceId").(string))
 	ctx = metadata.AppendToOutgoingContext(ctx, "x_real_ip", ctx.Value("x_real_ip").(string))
 	start := time.Now()
@@ -20,7 +20,7 @@ func CllentUnaryInterceptor(ctx context.Context, method string, req, reply inter
 	return err
 }
 
-func CllentStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func ClientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, "traceId", ctx.Value("traceId").(string))
 	ctx = metadata.AppendToOutgoingContext(ctx, "x_real_ip", ctx.Value("x_real_ip").(string))
 	logger := ctx.Value("logger").(*logrus.Entry)
