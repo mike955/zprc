@@ -69,10 +69,6 @@ func run(cmd *cobra.Command, args []string) {
 
 func new(ctx context.Context, dir, pName string) (err error) {
 	to := path.Join(dir, pName)
-	_, err = os.Stat(to)
-	if !os.IsNotExist(err) {
-		return fmt.Errorf("dir: %s is already exists", to)
-	}
 	dir = to
 
 	if err = copyTemplate(ctx, dir, pName); err != nil {
