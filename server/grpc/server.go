@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -18,6 +17,8 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/mike955/zrpc/grpc/interceptor"
+	"github.com/mike955/zrpc/log"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -33,7 +34,7 @@ type Server struct {
 	timeout  time.Duration
 	grpcOpts []grpc.ServerOption
 
-	Logger *logrus.Entry
+	Logger *log.Entry
 
 	prometheusEnableHandlingTimeHistogram bool
 	prometheusAddr                        string
@@ -62,7 +63,7 @@ func Timeout(timeout time.Duration) ServerOption {
 	}
 }
 
-func Logger(logger *logrus.Entry) ServerOption {
+func Logger(logger *log.Entry) ServerOption {
 	return func(s *Server) {
 		s.Logger = logger
 	}
@@ -89,8 +90,7 @@ func HealthCheck() ServerOption {
 
 func GrpcOpts(opts ...grpc.ServerOption) ServerOption {
 	return func(s *Server) {
-		// s.grpcOpts = append(s.grpcOpts, opts...)
-		s.grpcOpts = opts
+		s.grpcOpts = append(s.grpcOpts, opts...)
 	}
 }
 
@@ -124,7 +124,7 @@ func NewServer(app string, opts ...ServerOption) *Server {
 		network:  "tcp",
 		address:  ":5080",
 		timeout:  time.Second,
-		Logger:   defaultLogger().WithFields(logrus.Fields{"app": app}),
+		Logger:   log.NewLogger().WithFields(map[string]interface{}{"app": app}),
 		grpcOpts: []grpc.ServerOption{},
 	}
 	for _, o := range opts {
@@ -187,13 +187,13 @@ func (s *Server) healthCheck() {
 
 func (s *Server) handleGRPCServerSignals() {
 	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT, os.Interrupt) // stop process
+	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGQUIT, os.Interrupt) // stop process
 
 	s.Logger.Info("listen grpc quit signal ...")
 	select {
 	case signal := <-signalCh:
 		switch signal {
-		case syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT, os.Interrupt:
+		case syscall.SIGTERM, syscall.SIGQUIT, os.Interrupt:
 			s.Logger.Infof("stopping grpc process on %s signal", fmt.Sprintf("%s", signal))
 			if err := s.Stop(); err != nil {
 				s.Logger.Errorf(fmt.Sprintf("quit grpc process error|error:%s", err.Error()))
@@ -216,34 +216,10 @@ func defaultLogger() (logger *logrus.Logger) {
 
 func defaultGrpcOpt(s *Server) (opt grpc.ServerOption) {
 	return grpc.ChainUnaryInterceptor(
-		recoveryInterceptor(s.Logger),
-		timeoutInterceptor(s.Logger),
+		interceptor.RecoveryInterceptor(s.Logger),
+		interceptor.TimeoutInterceptor(s.Logger),
 		logInterceptor(s),
 	)
-}
-
-func recoveryInterceptor(logger *logrus.Entry) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		defer func() {
-			if rerr := recover(); rerr != nil {
-				buf := make([]byte, 64<<10)
-				n := runtime.Stack(buf, false)
-				buf = buf[:n]
-				logger.Errorf("recovery: %v: %+v\n%s\n", rerr, req, buf)
-				// add err handle
-			}
-		}()
-		return handler(ctx, req)
-	}
-}
-
-func timeoutInterceptor(logger *logrus.Entry) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Second*60)
-		defer cancel()
-		return handler(ctx, req)
-	}
 }
 
 func logInterceptor(s *Server) grpc.UnaryServerInterceptor {
@@ -261,13 +237,13 @@ func logInterceptor(s *Server) grpc.UnaryServerInterceptor {
 			if len(md.Get("traceId")) > 0 {
 				traceId = md.Get("traceId")[0]
 			} else {
-				traceId = "no-id"
+				traceId = "none"
 			}
 		}
 		path = info.FullMethod
 		params = req.(fmt.Stringer).String()
 		method = "POST"
-		logger := s.Logger.WithFields(logrus.Fields{
+		logger := s.Logger.WithField(map[string]interface{}{
 			"app":       s.app,
 			"x_real_ip": x_real_ip,
 			"traceId":   traceId,
@@ -276,19 +252,19 @@ func logInterceptor(s *Server) grpc.UnaryServerInterceptor {
 			"md":        md,
 			"params":    params,
 		})
-		logger.Infof("receive grpc request")
+		logger.Info("receive grpc request")
 		ctx = context.WithValue(ctx, "logger", logger)
 		ctx = context.WithValue(ctx, "x_real_ip", x_real_ip)
 		ctx = context.WithValue(ctx, "traceId", traceId)
 		ctx = context.WithValue(ctx, "md", md)
 		resp, err = handler(ctx, req)
-		logger = logger.WithFields(logrus.Fields{
+		logger = logger.WithField(map[string]interface{}{
 			"cost": time.Now().Sub(start).Seconds(),
 		})
 		if err != nil {
 			logger.Infof("grpc request failled | err: %s", err.Error())
 		} else {
-			logger.Infof("grpc request success")
+			logger.Info("grpc request success")
 		}
 		return
 	}

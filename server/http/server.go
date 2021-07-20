@@ -9,14 +9,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/mike955/zrpc/log"
 )
 
 type ServerOption func(o *Server)
 
 type Server struct {
 	*http.Server
-	Logger *logrus.Entry
+	Logger *log.Entry
 
 	app                                   string
 	prometheusEnableHandlingTimeHistogram bool
@@ -36,7 +36,7 @@ func ReadTimeout(timeout time.Duration) ServerOption {
 	}
 }
 
-func Logger(logger *logrus.Entry) ServerOption {
+func Logger(logger *log.Entry) ServerOption {
 	return func(s *Server) {
 		s.Logger = logger
 	}
@@ -55,7 +55,7 @@ func NewServer(app string, opts ...ServerOption) *Server {
 	srv := &Server{
 		app:    app,
 		Server: &http.Server{},
-		Logger: defaultLogger().WithFields(logrus.Fields{"app": app}),
+		Logger: log.NewLogger().WithFields(map[string]interface{}{"app": app}),
 	}
 	for _, o := range opts {
 		o(srv)
@@ -111,11 +111,4 @@ func (s *Server) handleHTTPServerSignals() {
 			os.Exit(1)
 		}
 	}
-}
-
-func defaultLogger() (logger *logrus.Logger) {
-	logger = logrus.New()
-	logger.Out = os.Stdout
-	logger.Formatter = &logrus.JSONFormatter{}
-	return
 }
