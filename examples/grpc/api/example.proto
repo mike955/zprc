@@ -1,0 +1,20 @@
+syntax="proto3";
+
+// protoc --proto_path=./.  --go-grpc_out=./  --go_out=./ example.proto
+
+package example;
+option go_package="/example";
+
+service Example {
+  rpc Hello (HelloRequest) returns (HelloResponse);
+}
+
+message HelloRequest {
+  string data = 1;
+}
+
+message HelloResponse {
+  uint64 code = 1;
+  string msg = 2;
+  string data = 3;
+}
