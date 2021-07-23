@@ -7,12 +7,16 @@ import (
 	pb "github.com/mike955/zrpc/examples/grpc/api/example"
 	"github.com/mike955/zrpc/examples/grpc/configs"
 	"github.com/mike955/zrpc/examples/grpc/service"
+	"github.com/mike955/zrpc/log"
 	"github.com/mike955/zrpc/server/grpc"
 	"gopkg.in/yaml.v2"
 )
 
 func NewGRPCServer() (server *grpc.Server) {
 	config := configs.GlobalConfig.Server
+	log := log.NewLogger()
+	log.SetOutFile("/Users/superbear/study/go/src/github.com/mike955/zrpc/examples/grpc/grpc.log")
+	logger := log.WithFields(map[string]interface{}{"app": config.AppName})
 	var opts = []grpc.ServerOption{
 		grpc.Address(config.GRPCAddr),
 		grpc.Timeout(config.Timeout),
@@ -22,11 +26,12 @@ func NewGRPCServer() (server *grpc.Server) {
 		grpc.Prometheus(true, configs.GlobalConfig.Server.HttpAddr),
 		grpc.Reflection(),
 		grpc.HealthCheck(),
+		grpc.Logger(logger),
 	}
 
 	server = grpc.NewServer(config.AppName, opts...)
-	log := server.Logger.WithField(map[string]interface{}{"app": config.AppName})
-	s := service.NewExampleService(log)
+	// log := server.Logger.WithField(map[string]interface{}{"app": config.AppName})
+	s := service.NewExampleService(logger)
 	pb.RegisterExampleServer(server, s)
 	return
 }

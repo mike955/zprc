@@ -17,7 +17,6 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/mike955/zrpc/grpc/interceptor"
 	"github.com/mike955/zrpc/log"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -216,8 +215,8 @@ func defaultLogger() (logger *logrus.Logger) {
 
 func defaultGrpcOpt(s *Server) (opt grpc.ServerOption) {
 	return grpc.ChainUnaryInterceptor(
-		interceptor.RecoveryInterceptor(s.Logger),
-		interceptor.TimeoutInterceptor(s.Logger),
+		// interceptor.RecoveryInterceptor(s.Logger),
+		// interceptor.TimeoutInterceptor(s.Logger),
 		logInterceptor(s),
 	)
 }
